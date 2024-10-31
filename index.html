@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Information</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .info {
+            margin-bottom: 20px;
+        }
+        #map {
+            height: 300px; /* Set the height of the map */
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WiFi Information</h1>
+        <div class="info" id="wifiInfo">
+            <h2>Loading...</h2>
+        </div>
+        <div class="info" id="rssiInfo">
+            <h2>RSSI Value: <span id="rssiValue">Loading...</span></h2>
+        </div>
+        <div class="info" id="locationInfo">
+            <h2>Location</h2>
+            <p>Latitude: <span id="latitude">Loading...</span></p>
+            <p>Longitude: <span id="longitude">Loading...</span></p>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let marker;
+        let circle;
+    
+        // Function to fetch WiFi information and display it
+        async function fetchWiFiInfo() {
+            try {
+                const response = await fetch('/wifi_info');
+                const data = await response.json();
+    
+                if (data.error) {
+                    document.getElementById('wifiInfo').innerHTML = `<p class="error">${data.error}</p>`;
+                    return;
+                }
+    
+                const { location, wifi_info } = data;
+    
+                // Display WiFi information
+                document.getElementById('wifiInfo').innerHTML = `
+                    <h2>Connected WiFi Information:</h2>
+                    <p>SSID: ${wifi_info.SSID}</p>
+                    <p>MAC Address: ${wifi_info['MAC Address']}</p>
+                    <p>Band: ${wifi_info.Band}</p>
+                    <p>Channel: ${wifi_info.Channel}</p>
+                    <p>Receive Rate: ${wifi_info['Receive Rate (Mbps)']} Mbps</p>
+                    <p>Transmit Rate: ${wifi_info['Transmit Rate (Mbps)']} Mbps</p>
+                    <p>IP Address: ${wifi_info['IP Address'] ? wifi_info['IP Address'] : 'Not available'}</p>
+                    <p>Signal (dBm): ${wifi_info['Signal (dBm)']}</p>
+                `;
+    
+                // Display RSSI value
+                document.getElementById('rssiValue').innerText = wifi_info['Signal (dBm)'];
+    
+                // Display location
+                document.getElementById('latitude').innerText = location.latitude;
+                document.getElementById('longitude').innerText = location.longitude;
+    
+                // Update map location
+                updateMap(location.latitude, location.longitude, wifi_info['Signal (dBm)']);
+    
+            } catch (error) {
+                document.getElementById('wifiInfo').innerHTML = `<p class="error">Error fetching WiFi information: ${error.message}</p>`;
+            }
+        }
+    
+        // Function to initialize the map
+        function initMap(latitude, longitude) {
+            map = L.map('map').setView([latitude, longitude], 13); // Set initial view
+    
+            // Add OpenStreetMap tile layer
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+            }).addTo(map);
+    
+            // Add a marker to the map
+            marker = L.marker([latitude, longitude]).addTo(map);
+    
+            // Add a circle to the map
+            circle = L.circle([latitude, longitude], {
+                color: 'green',
+                fillColor: '#3f0',
+                fillOpacity: 0.5,
+                radius: 50
+            }).addTo(map);
+        }
+    
+        // Function to update the marker and circle color based on RSSI
+        function updateMarkerColor(rssi) {
+            let color;
+    
+            if (rssi > -50) {
+                color = "green";
+            } else if (rssi <= -50 && rssi > -80) {
+                color = "yellow";
+            } else {
+                color = "red";
+            }
+    
+            marker.setStyle({ color: color });
+            marker.bindPopup(`Signal Strength: ${rssi} dBm`).openPopup();
+    
+            // Update circle color
+            circle.setStyle({ color: color, fillColor: color });
+        }
+    
+        // Function to update the map and marker every second
+        async function updateMap(latitude, longitude, rssi) {
+            if (!map) {
+                initMap(latitude, longitude);
+            }
+    
+            // Set marker position
+            marker.setLatLng([latitude, longitude]);
+            circle.setLatLng([latitude, longitude]);
+            map.setView([latitude, longitude]);
+    
+            // Update marker color based on RSSI
+            updateMarkerColor(rssi);
+        }
+    
+        // Call the fetch function on page load
+        fetchWiFiInfo();
+        setInterval(fetchWiFiInfo, 1000); // Update every second
+    </script>
+    
+</body>
+</html>
